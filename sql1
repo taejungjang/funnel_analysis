@@ -1,0 +1,44 @@
+with user_events_raw as (
+  select
+    user_pseudo_id,
+    max(if(event_name = 'page_view', 1, 0)) as page_view,
+    max(if(event_name = 'view_item', 1, 0)) as view_item,
+    max(if(event_name = 'add_to_cart', 1, 0)) as add_to_cart,
+    max(if(event_name = 'begin_checkout', 1, 0)) as begin_checkout,
+    max(if(event_name = 'add_shipping_info', 1, 0)) as add_shipping_info,
+    max(if(event_name = 'add_payment_info', 1, 0)) as add_payment_info,
+    max(if(event_name = 'purchase', 1, 0)) as purchase
+  from `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+  where _TABLE_SUFFIX between '20201101' and '20210131'
+  group by user_pseudo_id
+)
+,
+user_events_fixed as(
+select
+  user_pseudo_id,
+
+  GREATEST(page_view, view_item, add_to_cart, begin_checkout, add_shipping_info, add_payment_info, purchase) as page_view,
+
+  GREATEST(view_item, add_to_cart, begin_checkout, add_shipping_info, add_payment_info, purchase) as view_item,
+
+  GREATEST(add_to_cart, begin_checkout, add_shipping_info, add_payment_info, purchase) as add_to_cart,
+
+  GREATEST(begin_checkout, add_shipping_info, add_payment_info, purchase) as begin_checkout,
+
+  GREATEST(add_shipping_info, add_payment_info, purchase) as add_shipping_info,
+
+  GREATEST(add_payment_info, purchase) as add_payment_info,
+
+  purchase
+from user_events_raw)
+
+select
+  sum(page_view)           as page_view_users,
+  sum(view_item)           as view_item_users,
+  sum(add_to_cart)         as add_to_cart_users,
+  sum(begin_checkout)      as begin_checkout_users,
+  sum(add_shipping_info)   as add_shipping_info_users,
+  sum(add_payment_info)    as add_payment_info_users,
+  sum(purchase)            as purchase_users
+from user_events_fixed;
+
