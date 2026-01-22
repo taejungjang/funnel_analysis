@@ -1,0 +1,44 @@
+WITH session_events_raw AS (
+  SELECT
+    -- 세션 키
+    CONCAT(
+      user_pseudo_id, '_',
+      CAST(
+        (SELECT value.int_value 
+         FROM UNNEST(event_params) 
+         WHERE key = 'ga_session_id') AS STRING
+      )
+    ) AS session_id,
+
+    -- 매체 (session 단위 근사)
+    traffic_source.medium AS medium,
+
+    -- 이벤트 플래그
+    MAX(IF(event_name = 'page_view', 1, 0)) AS page_view,
+    MAX(IF(event_name = 'view_item', 1, 0)) AS view_item
+
+  FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+  WHERE _TABLE_SUFFIX BETWEEN '20201101' AND '20210131'
+    AND event_name IN ('page_view', 'view_item')
+  GROUP BY session_id, medium
+),
+
+session_events_fixed AS (
+  SELECT
+    session_id,
+    IFNULL(medium, '<Other>') AS medium,
+
+    -- 🔥 뒤 이벤트 발생 시 앞 단계 보정
+    GREATEST(page_view, view_item) AS page_view,
+    view_item
+  FROM session_events_raw
+)
+
+SELECT
+  medium,
+  COUNT(*) AS total_sessions,
+  SUM(view_item) AS view_item_sessions,
+  SAFE_DIVIDE(SUM(view_item), COUNT(*)) AS page_view_to_view_item_rate
+FROM session_events_fixed
+GROUP BY medium
+ORDER BY page_view_to_view_item_rate DESC;
