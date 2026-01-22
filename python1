@@ -1,0 +1,35 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import chi2_contingency
+from statsmodels.stats.proportion import proportions_ztest
+
+# 1. 데이터 세팅 (Referral, Organic, CPC)
+# [View_Item_Sessions, Total_Sessions - View_Item_Sessions]
+data = {
+    'referral': [14090, 56719 - 14090],
+    'organic': [25740, 116744 - 25740],
+    'cpc': [3168, 15249 - 3168]
+}
+df = pd.DataFrame(data, index=['Success', 'Fail'])
+
+# 2. 카이제곱 검정 (전체 비교)
+chi2, p_total, dof, expected = chi2_contingency(df)
+
+# 3. 사후검정 (Pairs 비교 - Bonferroni 교정)
+# 비교 대상: (Referral vs Organic), (Referral vs CPC), (Organic vs CPC)
+pairs = [('referral', 'organic'), ('referral', 'cpc'), ('organic', 'cpc')]
+posthoc_results = []
+
+for p1, p2 in pairs:
+    count = np.array([df[p1]['Success'], df[p2]['Success']])
+    nobs = np.array([sum(df[p1]), sum(df[p2])])
+    stat, p_val = proportions_ztest(count, nobs)
+    posthoc_results.append((f"{p1} vs {p2}", p_val))
+
+# 결과 출력
+print(f"전체 카이제곱 검정 p-value: {p_total:.10f}")
+print("-" * 30)
+for pair, p in posthoc_results:
+    # Bonferroni 교정 기준: 0.05 / 3 = 0.0166
+    status = "유의미함" if p < 0.0166 else "유의미하지 않음"
+    print(f"{pair}: p-value = {p:.10f} ({status})")
